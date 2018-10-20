@@ -29,13 +29,13 @@ struct disk *disco;
 
 //nodo base
 typedef struct node {
-    int val;
+    int pagina;
 		int marco;
     struct node * next;
 } node_t;
 
 //agregar nodo al final de la lista
-void push_l(node_t * head, int val) {
+void push_l(node_t * head, int pagina) {
     node_t * current = head;
     while (current->next != NULL) {
         current = current->next;
@@ -43,12 +43,12 @@ void push_l(node_t * head, int val) {
 
     /* now we can add a new variable */
     current->next = malloc(sizeof(node_t));
-    current->next->val = val;
+    current->next->pagina = pagina;
     current->next->next = NULL;
 }
 
 //para dejar marcada la variable del marco tmb
-void push_l_m(node_t * head, int val, int marco) {
+void push_l_m(node_t * head, int pagina, int marco) {
     node_t * current = head;
     while (current->next != NULL) {
         current = current->next;
@@ -56,28 +56,28 @@ void push_l_m(node_t * head, int val, int marco) {
 
     /* now we can add a new variable */
     current->next = malloc(sizeof(node_t));
-    current->next->val = val;
+    current->next->pagina = pagina;
 		current->next->marco = marco;
     current->next->next = NULL;
 }
 
 //agregar nodo al principio de la lista
 //push_i(&lista,numero);
-void push_i(node_t ** head, int val) {
+void push_i(node_t ** head, int pagina) {
     node_t * new_node;
     new_node = malloc(sizeof(node_t));
 
-    new_node->val = val;
+    new_node->pagina = pagina;
     new_node->next = *head;
     *head = new_node;
 }
 
 //lo mismo pero tmb editar la variable marco
-void push_i_m(node_t ** head, int val,int marco) {
+void push_i_m(node_t ** head, int pagina,int marco) {
     node_t * new_node;
     new_node = malloc(sizeof(node_t));
 
-    new_node->val = val;
+    new_node->pagina = pagina;
 		new_node->marco = marco;
     new_node->next = *head;
     *head = new_node;
@@ -85,7 +85,7 @@ void push_i_m(node_t ** head, int val,int marco) {
 
 //eliminar el primer nodo de una lista ligada
 int pop_i(node_t ** head) {
-    int retval = -1;
+    int retpagina = -1;
     node_t * next_node = NULL;
 
     if (*head == NULL) {
@@ -93,21 +93,21 @@ int pop_i(node_t ** head) {
     }
 
     next_node = (*head)->next;
-    retval = (*head)->val;
+    retpagina = (*head)->pagina;
     free(*head);
     *head = next_node;
 
-    return retval;
+    return retpagina;
 }
 
 //eliminar el ultimo nodo de una lista
 int pop_l(node_t * head) {
-    int retval = 0;
+    int retpagina = 0;
     /* if there is only one item in the list, remove it */
     if (head->next == NULL) {
-        retval = head->val;
+        retpagina = head->pagina;
         free(head);
-        return retval;
+        return retpagina;
     }
 
     /* get to the second to last node in the list */
@@ -117,16 +117,16 @@ int pop_l(node_t * head) {
     }
 
     /* now current points to the second to last item of the list, so let's remove current->next */
-    retval = current->next->val;
+    retpagina = current->next->pagina;
     free(current->next);
     current->next = NULL;
-    return retval;
+    return retpagina;
 }
 
 //elimina un nodo especifico de una lista
 int pop_index(node_t ** head, int n) {
     int i = 0;
-    int retval = -1;
+    int retpagina = -1;
     node_t * current = *head;
     node_t * temp_node = NULL;
 
@@ -142,11 +142,11 @@ int pop_index(node_t ** head, int n) {
     }
 
     temp_node = current->next;
-    retval = temp_node->val;
+    retpagina = temp_node->pagina;
     current->next = temp_node->next;
     free(temp_node);
 
-    return retval;
+    return retpagina;
 }
 
 // imprime linked list
@@ -154,7 +154,7 @@ void print_list(node_t * head) {
     node_t * current = head;
 
     while (current != NULL) {
-        printf("%d\n", current->val);
+        printf("%d\n", current->pagina);
 				printf("marco %i\n", current->marco);
         current = current->next;
     }
@@ -183,12 +183,33 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 }
 
 
-
+//este lo estoy usando para testear cosas
 void page_fault_handler_nuestro(struct page_table *pt, int page){
 	printf("handler nuestro page fault on page  #%d\n",page);
 
+	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
+	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
+	node_t * nodo = stack;
+	int marco_a_usar = -1;
+	while (nodo != NULL && marco_a_usar == -1){
+		if (nodo->pagina == -1){
+			marco_a_usar = nodo->marco;
+			nodo->pagina = page;
+		}
+		nodo = nodo->next;
+	}
+	printf("marco a utilizar %i\n",marco_a_usar);
 
-	exit(1);
+	if (marco_a_usar != -1){
+		page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+		//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
+		char * puntero;
+		puntero = page_table_get_physmem(pt);
+		disk_read(disco,page, &puntero[marco_a_usar * BLOCK_SIZE]);
+	}
+	//page_table_print(pt);
+	print_list(stack);
+
 }
 
 
@@ -227,14 +248,14 @@ int main( int argc, char *argv[] )
 
 	//node_t stack = NULL;
 	stack = malloc(sizeof(node_t));
-	stack->val = 0;
+	stack->pagina = -1;
 	stack->next = NULL;
 	stack->marco = 0;
 
 	for (int i=1; i < nframes; i++){
-		push_l_m(stack,0,i);
+		push_l_m(stack,-1,i);
 	}
-	print_list(stack);
+	//print_list(stack);
 
 
 		/* codigo default
