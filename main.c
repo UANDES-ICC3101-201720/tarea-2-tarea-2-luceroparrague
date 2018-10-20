@@ -163,12 +163,12 @@ void page_fault_handler_nuestro( struct page_table *pt, int page )
 
 
 	if (i != -1){
-		char * puntero;
-		page_table_set_entry(pt,page,i,PROT_READ); //Luego ajustará la tabla de páginas para que la página 2 quede asociada al marco 3, con permisos de lectura.
+		page_table_set_entry(pt,page,i,PROT_READ|PROT_WRITE); //Luego ajustará la tabla de páginas para que la página 2 quede asociada al marco 3, con permisos de lectura.
 
 		//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
+		char * puntero;
 		puntero = page_table_get_physmem(pt);
-		disk_write(disco,page, &puntero[i * BLOCK_SIZE]);
+		disk_read(disco,page, &puntero[i * BLOCK_SIZE]);
 		printf("%i\n",i);
 	}
 
