@@ -200,16 +200,16 @@ void page_fault_handler_nuestro(struct page_table *pt, int page){
 			nodo->pagina = page;
 			tipo_permiso = 1; //leer
 		}
-		if (nodo->pagina == page){
+		else if (nodo->pagina == page){
 			marco_a_usar = nodo->marco;
 			tipo_permiso = 2; //escribir
 		}
 		nodo = nodo->next;
 	}
-	printf("marco a utilizar %i\n",marco_a_usar);
+	//printf("marco a utilizar %i\n",marco_a_usar);
 	if (marco_a_usar == -1){
 		nodo = stack;
-		printf("%i\n",nodo->marco);
+		//printf("%i\n",nodo->marco);
 		marco_a_usar = stack->marco;
 		push_l_m(stack,page,nodo->marco);
 		pop_i(&stack);
