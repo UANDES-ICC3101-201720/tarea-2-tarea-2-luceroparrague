@@ -15,6 +15,14 @@ how to use the page table and disk interfaces.
 #include <string.h>
 #include <errno.h>
 
+//variables globales
+
+//esta tabla mantiene el estado de las memorias fisicas, 0 es libres 1 es ocupada
+int * tabla_frames;
+int largo_tabla_frames;
+
+//para acceder al disk dentro de los handlers
+struct disk *disco;
 
 //Aqui inicio comandos linked list
 
@@ -111,7 +119,6 @@ int pop_index(node_t ** head, int n) {
 
     return retval;
 }
-
 //aqui termino comandos linked list
 
 
@@ -129,21 +136,48 @@ void page_fault_handler_fifo( struct page_table *pt, int page )
 
 void page_fault_handler_rand( struct page_table *pt, int page )
 {
-	page_table_set_entry(pt,2,0,PROT_WRITE|PROT_READ);
-	//page_table_print_entry(pt,2);
-	//page_table_print(pt);
-	printf("%i\n",page_table_get_nframes(pt));
-	page_table_get_entry(pt,2,0,PROT_WRITE|PROT_READ);
-	printf("%i\n", page_table_get_npages(pt));
 	printf("handler rand page fault on page #%d\n",page);
 	exit(1);
 }
 
 void page_fault_handler_nuestro( struct page_table *pt, int page )
 {
+	/* //esto fue estudio personal
+	page_table_set_entry(pt,2,0,PROT_WRITE|PROT_READ);
+	page_table_print_entry(pt,2);
+	page_table_print(pt);
+	printf("%i\n",page_table_get_nframes(pt));
+	printf("%i\n", page_table_get_npages(pt));
+	*/
 	printf("handler nuestro page fault on page  #%d\n",page);
-	exit(1);
+	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
+	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
+	int i = -1;
+	for (int a = 0; a < largo_tabla_frames; ++a){
+		if (tabla_frames[a] == 0){
+				i = a;
+				tabla_frames[i] = 1;
+				a = largo_tabla_frames;
+		}
+	}
+
+
+	if (i != -1){
+		char * puntero;
+		page_table_set_entry(pt,page,i,PROT_READ); //Luego ajustará la tabla de páginas para que la página 2 quede asociada al marco 3, con permisos de lectura.
+
+		//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
+		puntero = page_table_get_physmem(pt);
+		disk_write(disco,page, &puntero[i * BLOCK_SIZE]);
+		printf("%i\n",i);
+	}
+
+
+	page_table_print(pt);
+
+	//exit(1);
 }
+
 
 int main( int argc, char *argv[] )
 {
@@ -152,10 +186,13 @@ int main( int argc, char *argv[] )
 		printf("use: virtmem <npages> <nframes> <lru|fifo> <sort|scan|focus>\n");
 		return 1;
 	}
-
 	int npages = atoi(argv[1]);
+
 	int nframes = atoi(argv[2]);
+	largo_tabla_frames = nframes;
+
 	const char *program = argv[4];
+
 	char *algoritmo = argv[3];
 
 	struct disk *disk = disk_open("myvirtualdisk",npages);
@@ -163,22 +200,29 @@ int main( int argc, char *argv[] )
 		fprintf(stderr,"couldn't create virtual disk: %s\n",strerror(errno));
 		return 1;
 	}
+	disco = disk;
 
-	/* codigo default
-	struct page_table *pt = page_table_create( npages, nframes, page_fault_handler );
-	if(!pt) {
-		fprintf(stderr,"couldn't create page table: %s\n",strerror(errno));
-		return 1;
-	}
-	*/
+
+	//esta tabla mantiene el estado de las memorias fisicas, 0 es libres 1 es ocupada
 	int frame_table[nframes];
 	for (int i = 0; i < nframes; ++i){
-		frame_table[i] = i;
+			frame_table[i] = 0;
 	}
+	tabla_frames = frame_table;
+
+
+
+		/* codigo default
+		struct page_table *pt = page_table_create( npages, nframes, page_fault_handler );
+		if(!pt) {
+			fprintf(stderr,"couldn't create page table: %s\n",strerror(errno));
+			return 1;
+		}
+		*/
 
 	struct page_table *pt;
 	if (strcmp(algoritmo,"rand") == 0){
-		printf("asd\n");
+
 		pt = page_table_create( npages, nframes, page_fault_handler_rand );
 		if(!pt) {
 			fprintf(stderr,"couldn't create page table: %s\n",strerror(errno));
@@ -212,6 +256,7 @@ int main( int argc, char *argv[] )
 
 	char *physmem = page_table_get_physmem(pt);
 
+
 	if(!strcmp(program,"sort")) {
 		sort_program(virtmem,npages*PAGE_SIZE);
 
@@ -222,9 +267,9 @@ int main( int argc, char *argv[] )
 		focus_program(virtmem,npages*PAGE_SIZE);
 
 	} else {
-		fprintf(stderr,"unknown program: %s\n",argv[3]);
+		fprintf(stderr,"unknown program: %s\n",argv[3]);}
 
-	}
+
 
 	page_table_delete(pt);
 	disk_close(disk);
