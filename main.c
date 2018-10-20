@@ -189,26 +189,50 @@ void page_fault_handler_nuestro(struct page_table *pt, int page){
 
 	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
 	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
+
+	int tipo_permiso = 0; // 1 = PROT_READ  2 = PROT_WRITE
+
 	node_t * nodo = stack;
 	int marco_a_usar = -1;
 	while (nodo != NULL && marco_a_usar == -1){
 		if (nodo->pagina == -1){
 			marco_a_usar = nodo->marco;
 			nodo->pagina = page;
+			tipo_permiso = 1; //leer
+		}
+		if (nodo->pagina == page){
+			marco_a_usar = nodo->marco;
+			tipo_permiso = 2; //escribir
 		}
 		nodo = nodo->next;
 	}
 	printf("marco a utilizar %i\n",marco_a_usar);
+	if (marco_a_usar == -1){
+		nodo = stack;
+		printf("%i\n",nodo->marco);
+		marco_a_usar = stack->marco;
+		push_l_m(stack,page,nodo->marco);
+		pop_i(&stack);
+		tipo_permiso = 1;
+	}
+
+	//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
 
 	if (marco_a_usar != -1){
-		page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
-		//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
 		char * puntero;
 		puntero = page_table_get_physmem(pt);
-		disk_read(disco,page, &puntero[marco_a_usar * BLOCK_SIZE]);
+		if (tipo_permiso == 1){
+			page_table_set_entry(pt,page,marco_a_usar,PROT_READ);
+			disk_read(disco,page, &puntero[marco_a_usar * BLOCK_SIZE]);
+		}
+		else if (tipo_permiso == 2){
+			page_table_set_entry(pt,page,marco_a_usar,PROT_WRITE);
+			disk_write(disco,page,&puntero[marco_a_usar * BLOCK_SIZE]);
+		}
 	}
 	//page_table_print(pt);
-	print_list(stack);
+	//printf("\n\nAQUI LISTA\n");
+	//print_list(stack);
 
 }
 
