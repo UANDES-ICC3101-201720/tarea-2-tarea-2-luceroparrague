@@ -24,15 +24,18 @@ int largo_tabla_frames;
 //para acceder al disk dentro de los handlers
 struct disk *disco;
 
+
 //Aqui inicio comandos linked list
 
+//nodo base
 typedef struct node {
     int val;
+		int marco;
     struct node * next;
 } node_t;
 
 //agregar nodo al final de la lista
-void push_fin(node_t * head, int val) {
+void push_l(node_t * head, int val) {
     node_t * current = head;
     while (current->next != NULL) {
         current = current->next;
@@ -44,12 +47,38 @@ void push_fin(node_t * head, int val) {
     current->next->next = NULL;
 }
 
+//para dejar marcada la variable del marco tmb
+void push_l_m(node_t * head, int val, int marco) {
+    node_t * current = head;
+    while (current->next != NULL) {
+        current = current->next;
+    }
+
+    /* now we can add a new variable */
+    current->next = malloc(sizeof(node_t));
+    current->next->val = val;
+		current->next->marco = marco;
+    current->next->next = NULL;
+}
+
 //agregar nodo al principio de la lista
+//push_i(&lista,numero);
 void push_i(node_t ** head, int val) {
     node_t * new_node;
     new_node = malloc(sizeof(node_t));
 
     new_node->val = val;
+    new_node->next = *head;
+    *head = new_node;
+}
+
+//lo mismo pero tmb editar la variable marco
+void push_i_m(node_t ** head, int val,int marco) {
+    node_t * new_node;
+    new_node = malloc(sizeof(node_t));
+
+    new_node->val = val;
+		new_node->marco = marco;
     new_node->next = *head;
     *head = new_node;
 }
@@ -119,8 +148,21 @@ int pop_index(node_t ** head, int n) {
 
     return retval;
 }
+
+// imprime linked list
+void print_list(node_t * head) {
+    node_t * current = head;
+
+    while (current != NULL) {
+        printf("%d\n", current->val);
+				printf("marco %i\n", current->marco);
+        current = current->next;
+    }
+}
+
 //aqui termino comandos linked list
 
+node_t *stack = NULL;
 
 void page_fault_handler_default( struct page_table *pt, int page )
 {
@@ -140,43 +182,16 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 	exit(1);
 }
 
-void page_fault_handler_nuestro( struct page_table *pt, int page )
-{
-	/* //esto fue estudio personal
-	page_table_set_entry(pt,2,0,PROT_WRITE|PROT_READ);
-	page_table_print_entry(pt,2);
-	page_table_print(pt);
-	printf("%i\n",page_table_get_nframes(pt));
-	printf("%i\n", page_table_get_npages(pt));
-	*/
+
+
+void page_fault_handler_nuestro(struct page_table *pt, int page){
 	printf("handler nuestro page fault on page  #%d\n",page);
-	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
-	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
-	int i = -1;
-	for (int a = 0; a < largo_tabla_frames; ++a){
-		if (tabla_frames[a] == 0){
-				i = a;
-				tabla_frames[i] = 1;
-				a = largo_tabla_frames;
-		}
-	}
 
 
-	if (i != -1){
-		page_table_set_entry(pt,page,i,PROT_READ|PROT_WRITE); //Luego ajustará la tabla de páginas para que la página 2 quede asociada al marco 3, con permisos de lectura.
-
-		//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
-		char * puntero;
-		puntero = page_table_get_physmem(pt);
-		disk_read(disco,page, &puntero[i * BLOCK_SIZE]);
-		printf("%i\n",i);
-	}
-
-
-	page_table_print(pt);
-
-	//exit(1);
+	exit(1);
 }
+
+
 
 
 int main( int argc, char *argv[] )
@@ -210,6 +225,16 @@ int main( int argc, char *argv[] )
 	}
 	tabla_frames = frame_table;
 
+	//node_t stack = NULL;
+	stack = malloc(sizeof(node_t));
+	stack->val = 0;
+	stack->next = NULL;
+	stack->marco = 0;
+
+	for (int i=1; i < nframes; i++){
+		push_l_m(stack,0,i);
+	}
+	print_list(stack);
 
 
 		/* codigo default
