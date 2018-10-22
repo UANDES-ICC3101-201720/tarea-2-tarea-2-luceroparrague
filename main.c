@@ -170,11 +170,7 @@ void page_fault_handler_default( struct page_table *pt, int page )
 	exit(1);
 }
 
-void page_fault_handler_fifo( struct page_table *pt, int page )
-{
-	printf("handler fifo page fault on page #%d\n",page);
-	exit(1);
-}
+
 
 void page_fault_handler_rand( struct page_table *pt, int page )
 {
@@ -182,8 +178,8 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 	exit(1);
 }
 
-//este lo estoy usando para testear cosas
-void page_fault_handler_nuestro(struct page_table *pt, int page){
+
+void page_fault_handler_fifo(struct page_table *pt, int page){
 	printf("handler nuestro page fault on page  #%d\n",page);
 	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
 	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
@@ -229,6 +225,12 @@ void page_fault_handler_nuestro(struct page_table *pt, int page){
 	//print_list(stack);
 }
 
+//este lo estoy usando para testear cosas
+void page_fault_handler_nuestro( struct page_table *pt, int page )
+{
+	printf("handler fifo page fault on page #%d\n",page);
+	exit(1);
+}
 
 
 
