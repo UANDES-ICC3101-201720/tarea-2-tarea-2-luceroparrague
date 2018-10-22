@@ -182,15 +182,12 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 	exit(1);
 }
 
-
 //este lo estoy usando para testear cosas
 void page_fault_handler_nuestro(struct page_table *pt, int page){
 	printf("handler nuestro page fault on page  #%d\n",page);
-
 	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
 	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
 
-	int tipo_permiso = 0; // 1 = PROT_READ  2 = PROT_WRITE
 
 	node_t * nodo = stack;
 	int marco_a_usar = -1;
@@ -198,42 +195,38 @@ void page_fault_handler_nuestro(struct page_table *pt, int page){
 		if (nodo->pagina == -1){
 			marco_a_usar = nodo->marco;
 			nodo->pagina = page;
-			tipo_permiso = 1; //leer
 		}
-		else if (nodo->pagina == page){
-			marco_a_usar = nodo->marco;
-			tipo_permiso = 2; //escribir
-		}
-		nodo = nodo->next;
+    nodo = nodo->next;
 	}
 	//printf("marco a utilizar %i\n",marco_a_usar);
-	if (marco_a_usar == -1){
-		nodo = stack;
-		//printf("%i\n",nodo->marco);
-		marco_a_usar = stack->marco;
-		push_l_m(stack,page,nodo->marco);
-		pop_i(&stack);
-		tipo_permiso = 1;
-	}
+  char * puntero;
+  puntero = page_table_get_physmem(pt);
+
+  //en caso que no encuentre un marco disponible hacer el pop del más viejo
+  if (marco_a_usar == -1){
+    nodo = stack;
+
+    //escribir en el disco la informacion que se encontraba en phisical memory para traer info nueva
+    int pag_vieja = nodo->pagina;
+    marco_a_usar = nodo->marco;
+    disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+    page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
+
+    //traer info nueva
+    push_l_m(stack,page,marco_a_usar);
+    pop_i(&stack);
+  }
+
+  if (marco_a_usar != -1){
+    page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
+  }
 
 	//Finalmente, cargará la página 2 desde el disco al marco 3 (¿¿¿Como???)
 
-	if (marco_a_usar != -1){
-		char * puntero;
-		puntero = page_table_get_physmem(pt);
-		if (tipo_permiso == 1){
-			page_table_set_entry(pt,page,marco_a_usar,PROT_READ);
-			disk_read(disco,page, &puntero[marco_a_usar * BLOCK_SIZE]);
-		}
-		else if (tipo_permiso == 2){
-			page_table_set_entry(pt,page,marco_a_usar,PROT_WRITE);
-			disk_write(disco,page,&puntero[marco_a_usar * BLOCK_SIZE]);
-		}
-	}
 	//page_table_print(pt);
 	//printf("\n\nAQUI LISTA\n");
 	//print_list(stack);
-
 }
 
 
@@ -343,6 +336,7 @@ int main( int argc, char *argv[] )
 
 	page_table_delete(pt);
 	disk_close(disk);
+	//To do: eliminar el stack del fifo, en caso que este hubiese sido utilizado
 
 	return 0;
 }
