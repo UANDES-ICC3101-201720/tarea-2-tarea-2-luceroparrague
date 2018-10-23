@@ -20,6 +20,7 @@ how to use the page table and disk interfaces.
 //esta tabla mantiene el estado de las memorias fisicas, 0 es libres 1 es ocupada
 int * tabla_frames;
 int largo_tabla_frames;
+int nframes;
 
 //para acceder al disk dentro de los handlers
 struct disk *disco;
@@ -162,20 +163,58 @@ void print_list(node_t * head) {
 
 //aqui termino comandos linked list
 
-node_t *stack = NULL;
-
-void page_fault_handler_default( struct page_table *pt, int page )
-{
-	printf("page fault on page #%d\n",page);
-	exit(1);
+int numero_random(int min, int max){
+  int numero;
+  numero = (min + lrand48() % (max));
+  return numero;
 }
 
-
+node_t *stack = NULL;
 
 void page_fault_handler_rand( struct page_table *pt, int page )
 {
 	printf("handler rand page fault on page #%d\n",page);
-	exit(1);
+
+  char * puntero;
+  puntero = page_table_get_physmem(pt);
+
+  node_t * nodo = stack;
+  int marco_a_usar = -1;
+  /*
+  while (nodo != NULL && marco_a_usar == -1){
+		if (nodo->pagina == page){
+			marco_a_usar = nodo->marco;
+		}
+    nodo = nodo->next;
+	}
+  */
+  nodo = stack;
+  if (marco_a_usar == -1){
+    int r = numero_random(0,nframes);
+    //printf("numero random %i\n",r);
+    int rr = r;
+    while (r>0){
+      nodo = nodo->next;
+      r--;
+    }
+    marco_a_usar = nodo->marco;
+    int pag_vieja = nodo->pagina;
+    if (pag_vieja != -1){
+      disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+      page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
+    }
+    pop_index(&stack,rr);
+    push_l_m(stack,page,marco_a_usar);
+  }
+
+  if (marco_a_usar != -1){
+    page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
+  }
+  //page_table_print(pt);
+  //print_list(stack);
+
+
 }
 
 
@@ -243,7 +282,7 @@ int main( int argc, char *argv[] )
 	}
 	int npages = atoi(argv[1]);
 
-	int nframes = atoi(argv[2]);
+	nframes = atoi(argv[2]);
 	largo_tabla_frames = nframes;
 
 	const char *program = argv[4];
@@ -256,14 +295,6 @@ int main( int argc, char *argv[] )
 		return 1;
 	}
 	disco = disk;
-
-
-	//esta tabla mantiene el estado de las memorias fisicas, 0 es libres 1 es ocupada
-	int frame_table[nframes];
-	for (int i = 0; i < nframes; ++i){
-			frame_table[i] = 0;
-	}
-	tabla_frames = frame_table;
 
 	//node_t stack = NULL;
 	stack = malloc(sizeof(node_t));
@@ -304,13 +335,6 @@ int main( int argc, char *argv[] )
 	else if (strcmp(algoritmo,"our") == 0){
 		//printf("el if funciona\n");
 		pt = page_table_create( npages, nframes, page_fault_handler_nuestro );
-		if(!pt) {
-			fprintf(stderr,"couldn't create page table: %s\n",strerror(errno));
-			return 1;
-		}
-	}
-	else {
-		pt = page_table_create( npages, nframes, page_fault_handler_default );
 		if(!pt) {
 			fprintf(stderr,"couldn't create page table: %s\n",strerror(errno));
 			return 1;
