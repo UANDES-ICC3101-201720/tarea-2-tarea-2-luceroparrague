@@ -9,7 +9,7 @@ how to use the page table and disk interfaces.
 #include "page_table.h"
 #include "disk.h"
 #include "program.h"
-
+#include <getopt.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,6 +21,9 @@ how to use the page table and disk interfaces.
 int * tabla_frames;
 int largo_tabla_frames;
 int nframes;
+int nfaltas = 0;
+int nlectura = 0;
+int nescritura = 0;
 
 //para acceder al disk dentro de los handlers
 struct disk *disco;
@@ -174,6 +177,7 @@ node_t *stack = NULL;
 void page_fault_handler_rand( struct page_table *pt, int page )
 {
 	printf("handler rand page fault on page #%d\n",page);
+	nfaltas++;
 
   char * puntero;
   puntero = page_table_get_physmem(pt);
@@ -201,6 +205,7 @@ void page_fault_handler_rand( struct page_table *pt, int page )
     int pag_vieja = nodo->pagina;
     if (pag_vieja != -1){
       disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+      nescritura++;
       page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
     }
     pop_index(&stack,rr);
@@ -209,6 +214,7 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 
   if (marco_a_usar != -1){
     page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    nlectura++;
     disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
   }
   //page_table_print(pt);
@@ -220,6 +226,7 @@ void page_fault_handler_rand( struct page_table *pt, int page )
 
 void page_fault_handler_fifo(struct page_table *pt, int page){
 	printf("handler nuestro page fault on page  #%d\n",page);
+	nfaltas++;
 	//"Si la aplicación comienza intentando leer la página 2, esto causará una falta de página.""
 	//"El manejador de falta de página escogerá un marco libre, por ejemplo, el 3.""
 
@@ -245,6 +252,7 @@ void page_fault_handler_fifo(struct page_table *pt, int page){
     int pag_vieja = nodo->pagina;
     marco_a_usar = nodo->marco;
     disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+    nescritura++;
     page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
 
     //traer info nueva
@@ -254,6 +262,7 @@ void page_fault_handler_fifo(struct page_table *pt, int page){
 
   if (marco_a_usar != -1){
     page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    nlectura++;
     disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
   }
 
@@ -265,29 +274,130 @@ void page_fault_handler_fifo(struct page_table *pt, int page){
 }
 
 //este lo estoy usando para testear cosas
+//el costume es en base a un random escoge si usar fifo o random 
 void page_fault_handler_nuestro( struct page_table *pt, int page )
 {
-	printf("handler fifo page fault on page #%d\n",page);
-	exit(1);
+	nfaltas++;
+	printf("handler our page fault on page #%d\n",page);
+	int numero;
+  numero = numero_random(0, 2);
+  
+  if(numero == 0){
+  	node_t * nodo = stack;
+		int marco_a_usar = -1;
+		while (nodo != NULL && marco_a_usar == -1){
+			if (nodo->pagina == -1){
+				marco_a_usar = nodo->marco;
+				nodo->pagina = page;
+			}
+    	nodo = nodo->next;
+		}
+	//printf("marco a utilizar %i\n",marco_a_usar);
+  	char * puntero;
+  	puntero = page_table_get_physmem(pt);
+
+  //en caso que no encuentre un marco disponible hacer el pop del más viejo
+  	if (marco_a_usar == -1){
+    	nodo = stack;
+
+    //escribir en el disco la informacion que se encontraba en phisical memory para traer info nueva
+    	int pag_vieja = nodo->pagina;
+    	marco_a_usar = nodo->marco;
+    	disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+    	nescritura++;
+    	page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
+
+    //traer info nueva
+    	push_l_m(stack,page,marco_a_usar);
+    	pop_i(&stack);
+ 	 	}
+
+  	if (marco_a_usar != -1){
+    	page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    	nlectura++;
+    	disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
+  	}
+  }
+  if(numero == 1){
+  	char * puntero;
+  	puntero = page_table_get_physmem(pt);
+
+  	node_t * nodo = stack;
+  	int marco_a_usar = -1;
+  /*
+  while (nodo != NULL && marco_a_usar == -1){
+		if (nodo->pagina == page){
+			marco_a_usar = nodo->marco;
+		}
+    nodo = nodo->next;
+	}
+  */
+  	nodo = stack;
+  	if (marco_a_usar == -1){
+    	int r = numero_random(0,nframes);
+    	//printf("numero random %i\n",r);
+    	int rr = r;
+    	while (r>0){
+    	  nodo = nodo->next;
+    	  r--;
+    	}
+    	marco_a_usar = nodo->marco;
+    	int pag_vieja = nodo->pagina;
+    	if (pag_vieja != -1){
+    	  disk_write(disco,pag_vieja,&puntero[marco_a_usar * PAGE_SIZE]);
+    	  nescritura++;
+    	  page_table_set_entry(pt,pag_vieja,marco_a_usar,0);
+    	}
+    	pop_index(&stack,rr);
+    	push_l_m(stack,page,marco_a_usar);
+  	}
+
+  	if (marco_a_usar != -1){
+    	page_table_set_entry(pt,page,marco_a_usar,PROT_READ|PROT_WRITE);
+    	nlectura++;
+    	disk_read(disco,page,&puntero[marco_a_usar * PAGE_SIZE]);
+  	}
+  }
+	
 }
 
 
 
 int main( int argc, char *argv[] )
 {
-	if(argc!=5) {
-		/* Add 'random' replacement algorithm if the size of your group is 3 */
+	/*if(argc!=5) {
+		
 		printf("use: virtmem <npages> <nframes> <lru|fifo> <sort|scan|focus>\n");
 		return 1;
-	}
-	int npages = atoi(argv[1]);
+	}*/
+	int npages = 0;
 
-	nframes = atoi(argv[2]);
+	nframes = 0;
 	largo_tabla_frames = nframes;
 
-	const char *program = argv[4];
+	const char *program;
 
-	char *algoritmo = argv[3];
+	char *algoritmo;
+	
+	int c;
+	
+	while((c = getopt (argc, argv, "n:f:a:p:"))!= -1){
+		switch(c)
+		{
+			case 'n':
+				npages= atoi(optarg);
+				break;
+			case 'f':
+				nframes = atoi(optarg);
+				break;
+			case 'a':
+				algoritmo = optarg;
+				break;
+			case 'p':
+				program = optarg;
+		}
+	}
+	printf("%d, %d, %s, %s \n", npages, nframes, algoritmo, program);
 
 	struct disk *disk = disk_open("myvirtualdisk",npages);
 	if(!disk) {
@@ -343,7 +453,7 @@ int main( int argc, char *argv[] )
 
 	char *virtmem = page_table_get_virtmem(pt);
 
-	char *physmem = page_table_get_physmem(pt);
+	/*char *physmem = page_table_get_physmem(pt);*/
 
 
 	if(!strcmp(program,"sort")) {
@@ -363,6 +473,7 @@ int main( int argc, char *argv[] )
 	page_table_delete(pt);
 	disk_close(disk);
 	//To do: eliminar el stack del fifo, en caso que este hubiese sido utilizado
+	printf("faltas = %d, escritura en disco = %d, lectura de disco = %d", nfaltas,nescritura,nlectura);
 
 	return 0;
 }
